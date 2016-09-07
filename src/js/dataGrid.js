@@ -12,50 +12,37 @@
                 return [];
             }
         })
-        .controller('gridController', ['$scope', '$element', '$filter', '$location', 'filtersFactory', function ($scope, $element, $filter, $location, filtersFactory) {
+        .controller('gridController', ['$scope', '$element', '$filter', '$location', 'filtersFactory', '$timeout', function ($scope, $element, $filter, $location, filtersFactory, $timeout) {
             // values by default
-            $scope._gridOptions = $scope.$eval($element.attr('grid-options'));
-            $scope._gridActions = $scope.$eval($element.attr('grid-actions'));
-            $scope.serverPagination = $element.attr('server-pagination') === 'true';
-            $scope.getDataDelay = $element.attr('get-delay') || 350;
+            $scope._gridActions = $scope.gridActions || {};
 
-            if (!$scope._gridActions) {
-                $scope.$parent.$eval($element.attr('grid-actions') + '= {}');
-                $scope._gridActions = $scope.$parent.$eval($element.attr('grid-actions'));
-            }
-
-            $scope._gridOptions.grid = $scope;
-
-            $scope.filtered = $scope._gridOptions.data.slice();
-            $scope.paginationOptions = $scope._gridOptions.pagination ? angular.copy($scope._gridOptions.pagination) : {};
+            $scope.paginationOptions = {};
             $scope.defaultsPaginationOptions = {
                 itemsPerPage: $scope.paginationOptions.itemsPerPage || '10',
                 currentPage: $scope.paginationOptions.currentPage || 1
             };
             $scope.paginationOptions = angular.copy($scope.defaultsPaginationOptions);
-            $scope.sortOptions = $scope._gridOptions.sort ? angular.copy($scope._gridOptions.sort) : {};
-            $scope.customFilters = $scope._gridOptions.customFilters ? angular.copy($scope._gridOptions.customFilters) : {};
-            $scope.urlSync = $scope._gridOptions.urlSync;
+            $scope.sortOptions = {};
+            $scope.customFilters = {};
 
-            $scope.$watch('_gridOptions.data', function (newValue) {
+            $timeout(parseUrl);
+
+            $scope.$watch('gridRecords', function (newValue) {
                 if (newValue && newValue.length) {
                     $scope.sortCache = {};
-                    $scope.filtered = $scope._gridOptions.data.slice();
                     $scope.filters.forEach(function (filter) {
                         if (filter.filterType === 'select') {
-                            $scope[filter.model + 'Options'] = generateOptions($scope.filtered, filter.filterBy);
+                            $scope[filter.model + 'Options'] = generateOptions($scope.gridRecords, filter.filterBy);
                         }
                     });
 
                     if ($scope.urlSync) {
-                        parseUrl($location.path());
-                    } else {
-                        applyFilters();
+                        parseUrl();
                     }
                 }
             });
 
-            $scope.sort = function (predicate, isDefaultSort) {
+            $scope.$parent.sort = function (predicate, isDefaultSort) {
                 if (!isDefaultSort) {
                     var direction = $scope.sortOptions.predicate === predicate && $scope.sortOptions.direction === 'desc' ? 'asc' : 'desc';
                     $scope.sortOptions.direction = direction;
@@ -65,7 +52,7 @@
                 $scope.reloadGrid(isDefaultSort);
             };
 
-            $scope.filter = function () {
+            $scope.$parent.filter = function () {
                 $scope.paginationOptions.currentPage = 1;
                 $scope.reloadGrid();
             };
@@ -76,8 +63,8 @@
                         clearTimeout($scope.getDataTimeout);
                         $scope.getDataTimeout = setTimeout(getData, $scope.getDataDelay);
                     }
-                    if ($scope.filtered) {
-                        parseUrl($location.path());
+                    if ($scope.gridRecords) {
+                        parseUrl();
                     }
                 }
             });
@@ -91,19 +78,19 @@
             };
 
             $scope._gridActions.refresh = $scope.reloadGrid;
+            $scope.$parent.reloadGrid = $scope.reloadGrid;
             $scope._gridActions.filter = $scope.filter;
             $scope._gridActions.sort = $scope.sort;
-
             function changePath(isDefaultSort) {
-                var path, needApplyFilters = false;
+                var path = {}, needApplyFilters = false;
 
-                path = 'page=' + $scope.paginationOptions.currentPage;
+                path.page = $scope.paginationOptions.currentPage;
                 if ($scope.paginationOptions.itemsPerPage !== $scope.defaultsPaginationOptions.itemsPerPage) {
-                    path += '&itemsPerPage=' + $scope.paginationOptions.itemsPerPage;
+                    path.itemsPerPage = $scope.paginationOptions.itemsPerPage;
                 }
 
                 if ($scope.sortOptions.predicate) {
-                    path += '&sort=' + encodeURIComponent($scope.sortOptions.predicate + "-" + $scope.sortOptions.direction);
+                    path.sort = encodeURIComponent($scope.sortOptions.predicate + "-" + $scope.sortOptions.direction);
                 }
 
                 //custom filters
@@ -127,21 +114,21 @@
                             strValue += value.getDate() < 10 ? '0' + value.getDate() : value.getDate();
                             value = strValue;
                         }
-                        path += '&' + encodeURIComponent(urlName) + '=' + encodeURIComponent(value);
+                        path[encodeURIComponent(urlName)] = encodeURIComponent(value);
                     }
                 });
 
                 if (needApplyFilters) {
                     applyFilters();
                 }
-                $location.path(path);
+                $location.search(path);
                 if (isDefaultSort) {
                     $scope.$apply();
                 }
             }
 
             function parseUrl() {
-                var url = $location.path().slice(1),
+                var url = $.param($location.search()),
                     params = {},
                     customParams = {};
 
@@ -197,7 +184,7 @@
                 }
 
                 if (params.page) {
-                    if (!$scope.serverPagination && ((params.page - 1) * $scope.paginationOptions.itemsPerPage > $scope.filtered.length)) {
+                    if (!$scope.serverPagination && ((params.page - 1) * $scope.paginationOptions.itemsPerPage > $scope.gridRecords.length)) {
                         $scope.paginationOptions.currentPage = 1;
                     } else {
                         $scope.paginationOptions.currentPage = params.page;
@@ -216,18 +203,20 @@
             }
 
             function getData() {
-                var url = $location.path().slice(1);
-                if (!url && $scope.sortOptions.predicate) {
+                var search = $location.search();
+                var isEmpty = !Object.keys(search).length;
+                if (isEmpty && $scope.sortOptions.predicate) {
                     $scope.sort($scope.sortOptions.predicate, true);
                 } else {
-                    $scope._gridOptions.getData('?' + url, function (data, totalItems) {
-                        $scope.filtered = data;
-                        $scope.paginationOptions.totalItems = totalItems;
+                    $scope.$parent.params = search;
+                    $scope.getRecords(search).then(function (result) {
+                        $scope.gridRecords = result.records;
+                        $scope.paginationOptions.totalItems = result.totalCount;
                     });
                 }
                 // -> to promise
                 //$scope._gridOptions.getData('?' + url).then(function (data, totalItems) {
-                //    $scope.filtered = data;
+                //    $scope.gridRecords = data;
                 //    $scope.paginationOptions.totalItems = totalItems;
                 //});
             }
@@ -240,10 +229,8 @@
 
                 if ($scope.sortOptions.predicate && $scope.sortCache && $scope.sortCache.predicate === $scope.sortOptions.predicate
                     && $scope.sortCache.direction === $scope.sortOptions.direction) {
-                    $scope.filtered = $scope.sortCache.data.slice();
+                    $scope.gridRecords = $scope.sortCache.data.slice();
                     sorted = true;
-                } else {
-                    $scope.filtered = $scope._gridOptions.data.slice();
                 }
 
                 $scope._time.copy = Date.now() - time;
@@ -253,16 +240,16 @@
                 var time3 = Date.now();
 
                 if ($scope.sortOptions.predicate && !sorted) {
-                    $scope.filtered = $filter('orderBy')($scope.filtered, $scope.sortOptions.predicate, $scope.sortOptions.direction === 'desc');
+                    $scope.gridRecords = $filter('orderBy')($scope.gridRecords, $scope.sortOptions.predicate, $scope.sortOptions.direction === 'desc');
                     $scope.sortCache = {
-                        data: $scope.filtered.slice(),
+                        data: $scope.gridRecords.slice(),
                         predicate: $scope.sortOptions.predicate,
                         direction: $scope.sortOptions.direction
                     }
                 }
                 $scope._time.sort = Date.now() - time3;
                 $scope._time.all = Date.now() - time;
-                $scope.paginationOptions.totalItems = $scope.filtered.length;
+                $scope.paginationOptions.totalItems = $scope.gridRecords.length;
             }
 
             function applyCustomFilters() {
@@ -272,11 +259,11 @@
                         value = filter.isInScope ? $scope.$eval(urlName) : $scope.$parent.$eval(urlName),
                         type = filter.filterType;
                     if ($scope.customFilters[urlName]) {
-                        $scope.filtered = $scope.customFilters[urlName]($scope.filtered, value, predicate);
+                        $scope.gridRecords = $scope.customFilters[urlName]($scope.gridRecords, value, predicate);
                     } else if (value && type) {
                         var filterFunc = filtersFactory.getFilterByType(type);
                         if (filterFunc) {
-                            $scope.filtered = filterFunc($scope.filtered, value, predicate);
+                            $scope.gridRecords = filterFunc($scope.gridRecords, value, predicate);
                         }
                     }
                 });
@@ -287,7 +274,15 @@
                 restrict: 'EA',
                 //transclude: true,
                 //replace: true,
-                scope: true,
+                scope: {
+                    serverPagination : '=?',
+                    gridData : '=?',
+                    gridRecords : '=?',
+                    getRecords : '&',
+                    gridActions : '=?',
+                    getDataDelay : '=?',
+                    count : '=?'
+                },
                 controller: 'gridController',
                 link: function ($scope, $element, attrs) {
                     var sorting = [],
@@ -296,7 +291,7 @@
                         directiveElement = $element.parent(),
                         gridId = attrs.id,
                         serverPagination = attrs.serverPagination === 'true';
-
+                    $scope.getDataDelay = $scope.getDataDelay || 350;
 
                     angular.forEach(angular.element(directiveElement[0].querySelectorAll('[sortable]')), function (sortable) {
                         var element = angular.element(sortable),
