@@ -281,6 +281,8 @@
                     getRecords : '&',
                     gridActions : '=?',
                     getDataDelay : '=?',
+                    sortOptions : '=?',
+                    paginationOptions : '=?',
                     count : '=?'
                 },
                 controller: 'gridController',
