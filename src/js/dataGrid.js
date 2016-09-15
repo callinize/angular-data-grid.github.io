@@ -42,7 +42,7 @@
                 }
             });
 
-            $scope.$parent.sort = function (predicate, isDefaultSort) {
+            $scope.sort = $scope.$parent.sort = function (predicate, isDefaultSort) {
                 if (!isDefaultSort) {
                     var direction = $scope.sortOptions.predicate === predicate && $scope.sortOptions.direction === 'desc' ? 'asc' : 'desc';
                     $scope.sortOptions.direction = direction;
@@ -52,7 +52,7 @@
                 $scope.reloadGrid(isDefaultSort);
             };
 
-            $scope.$parent.filter = function () {
+            $scope.filter = $scope.$parent.filter = function () {
                 $scope.paginationOptions.currentPage = 1;
                 $scope.reloadGrid();
             };
