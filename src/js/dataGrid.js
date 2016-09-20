@@ -27,6 +27,8 @@
 
             $timeout(parseUrl);
 
+            var sortingChange, reload;
+
             $scope.$watch('gridRecords', function (newValue) {
                 if (newValue && newValue.length) {
                     $scope.sortCache = {};
@@ -50,6 +52,7 @@
                 }
                 $scope.paginationOptions.currentPage = 1;
                 $scope.reloadGrid(isDefaultSort);
+                sortingChange = true;
             };
 
             $scope.filter = $scope.$parent.filter = function () {
@@ -58,7 +61,7 @@
             };
 
             $scope.$on('$locationChangeSuccess', function () {
-                if ($scope.urlSync || $scope.serverPagination) {
+                if (shouldUpdate()) {
                     if ($scope.serverPagination) {
                         clearTimeout($scope.getDataTimeout);
                         $scope.getDataTimeout = setTimeout(getData, $scope.getDataDelay);
@@ -69,7 +72,17 @@
                 }
             });
 
+            function shouldUpdate() {
+                var update = $scope.urlSync || $scope.serverPagination;
+                var _reload = reload;
+                var _sortingChange = sortingChange;
+                sortingChange = false;
+                reload = false;
+                return update && (_reload || _sortingChange);
+            }
+
             $scope.reloadGrid = function (isDefaultSort) {
+                reload = true;
                 if ($scope.urlSync || $scope.serverPagination) {
                     changePath(isDefaultSort);
                 } else {
