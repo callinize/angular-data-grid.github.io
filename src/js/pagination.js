@@ -95,6 +95,7 @@
                 boundaryLinkNumbers = angular.isDefined($attrs.boundaryLinkNumbers) ? $scope.$parent.$eval($attrs.boundaryLinkNumbers) : paginationConfig.boundaryLinkNumbers;
             $scope.boundaryLinks = angular.isDefined($attrs.boundaryLinks) ? $scope.$parent.$eval($attrs.boundaryLinks) : paginationConfig.boundaryLinks;
             $scope.directionLinks = angular.isDefined($attrs.directionLinks) ? $scope.$parent.$eval($attrs.directionLinks) : paginationConfig.directionLinks;
+            $scope.pageLinks = angular.isDefined($attrs.pageLinks) ? $scope.$parent.$eval($attrs.pageLinks) : paginationConfig.directionLinks;
 
             paging.create(this, $scope, $attrs);
 
